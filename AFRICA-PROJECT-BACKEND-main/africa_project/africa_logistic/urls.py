@@ -1,0 +1,119 @@
+from django.urls import path, include
+from africa_logistic import views
+
+urlpatterns = [
+    path('auth/register/', views.register_user, name='register_user'),
+    path('auth/verify-account/', views.verify_account, name='verify_account'),
+    path('auth/request-password-reset/', views.request_password_reset, name='request_password_reset'),
+    path('auth/reset-password/', views.reset_password, name='reset_password'),
+    path('auth/login/', views.login_user, name='login_user'),
+    path('auth/logout/', views.logout_user, name='logout_user'),
+    path('auth/resend-verification/', views.resend_verification_code, name='resend_verification_code'),
+    path('auth/activate-2fa/', views.activate_2FA, name='activate_2FA'),
+    path('auth/deactivate-2fa/', views.deactivate_2FA, name='deactivate_2FA'),
+    path('auth/login/2fa/', views.send_2FA_after_checking, name='verify_2fa_code'),
+    path('auth/login/2fa/verify/', views.check_login_with_2FA, name='check_login_with_2FA'),
+    path('auth/resend-2fa/', views.resend_2FA_code, name='resend_2fa_code'),
+    
+    path('user/me/', views.get_connected_user, name='get_connected_user'),
+    path('user/me/update/', views.update_infos, name='update_infos'),
+
+    # Wallet
+    path('wallet/me/', views.get_my_wallet, name='get_my_wallet'),
+    path('wallet/transactions/', views.get_my_wallet_transactions, name='get_my_wallet_transactions'),
+    path('wallet/topup/', views.topup_wallet, name='topup_wallet'),
+
+    # Notifications
+    path('notifications/', views.get_my_notifications, name='get_my_notifications'),
+    path('notifications/read-all/', views.mark_all_notifications_read, name='mark_all_notifications_read'),
+    path('notifications/<str:notif_slug>/read/', views.mark_notification_read, name='mark_notification_read'),
+    
+    path('data-admin/users/', views.get_users_by_data_admin, name='get_users_by_data_admin'),
+    path('data-admin/user/<str:user_slug>/alter/', views.alter_user_by_data_admin, name='alter_user_by_data_admin'),
+    path('data-admin/user/<str:user_slug>/desactivate/', views.desactivate_user_by_data_admin, name='desactivate_user_by_data_admin'),
+    path('data-admin/user/<str:user_slug>/activate/', views.activate_user_by_data_admin, name='activate_user_by_data_admin'),
+    path('data-admin/user/<str:user_slug>/delete/', views.delete_user_by_data_admin, name='delete_user_by_data_admin'),
+    path('data-admin/user/<str:user_slug>/restore/', views.restore_deleted_user_by_data_admin, name='restore_deleted_user_by_data_admin'),
+    path('data-admin/user/<str:user_slug>/', views.get_user_info_by_data_admin, name='get_user_info_by_data_admin'),
+    
+    path('data-admin/type-document/', views.get_types_legal_document_by_data_admin, name='get_types_legal_document_by_data_admin'),
+    path('public/document-types/', views.get_public_document_types, name='get_public_document_types'),
+    path('data-admin/type-document/add/', views.add_type_legal_document_by_data_admin, name='add_type_legal_document_by_data_admin'),
+    path('data-admin/type-document/<str:type_slug>/alter/', views.alter_type_legal_document_by_data_admin, name='alter_type_legal_document_by_data_admin'),
+    path('data-admin/type-document/<str:type_slug>/delete/', views.delete_type_legal_document_by_data_admin, name='delete_type_legal_document_by_data_admin'),
+    
+    path('legal-document/add/', views.add_legal_document, name='add_legal_document'),
+    path('legal-document/<str:doc_slug>/alter/', views.alter_legal_document, name='alter_legal_document'),
+    path('legal-document/<str:doc_slug>/delete/', views.delete_legal_document, name='delete_legal_document'),
+    path('legal-document/me/', views.get_my_legal_documents, name='get_my_legal_documents'),
+    path('legal-document/<str:doc_slug>/', views.get_legal_document_details, name='get_legal_document_details'),
+    
+    # Not tested yet
+    path('legal-document/<str:doc_slug>/validate/', views.validate_document, name='validate_document'),
+    
+    path('legal-document/user/<str:user_slug>/', views.get_legal_documents_of_user, name='get_legal_documents_of_user'),
+    
+    
+    
+    # path("oauth/", include("allauth.urls")),
+    path('accounts/oauth/login/', views.oauth_login, name="oauth_login"),
+    path('accounts/oauth/callback/', views.oauth_callback, name="oauth_callback"),
+    
+    ################################################################################################################################
+    
+    # ==================== ROUTES CLIENTS ====================
+    
+    # Création
+    path('demandes/create/', views.create_transport_request, name='create_demande'),
+    
+    # Liste et historique
+    path('demandes/mes-demandes/', views.get_my_requests, name='mes_demandes'),
+    path('demandes/mes-demandes-assignees/', views.get_my_assigned_requests, name='mes_demandes_assignees'),
+    path('demandes/disponibles/', views.get_available_requests, name='demandes_disponibles'),
+    path('demandes/', views.get_transport_requests, name='liste_demandes'),
+    
+    # Détails, modification, annulation, suppression
+    path('demandes/<str:request_slug>/', views.get_transport_request_detail, name='detail_demande'),
+    path('demandes/<str:request_slug>/update/', views.update_transport_request, name='update_demande'),
+    path('demandes/<str:request_slug>/annuler/', views.cancel_request, name='annuler_demande'),
+    path('demandes/<str:request_slug>/delete/', views.delete_transport_request, name='delete_demande'),
+    
+    # ==================== ROUTES ADMIN ====================
+    
+    # Liste toutes les demandes
+    path('admin/demandes/', views.get_all_requests_by_admin, name='admin_all_demandes'),
+    
+    # Gestion du statut et assignation
+    path('admin/demandes/<str:request_slug>/statut/', views.update_status, name='admin_update_statut'),
+    path('admin/demandes/<str:request_slug>/assign/', views.assign_transporter, name='assign_transporter'),
+    
+    # Statistiques et KPIs
+    path('admin/statistics/', views.get_statistics, name='admin_statistics'),
+    path('admin/kpis/', views.get_admin_kpis, name='admin_kpis'),
+    
+    # Suppression définitive et restauration
+    path('admin/demandes/<str:request_slug>/hard-delete/', views.delete_transport_request, name='admin_hard_delete'),
+    path('admin/demandes/<str:request_slug>/restore/', views.restore_deleted_request, name='admin_restore'),
+    
+    # ==================== ROUTES VÉHICULES ====================
+    
+    # CRUD véhicules
+    path('vehicles/', views.get_vehicles, name='get_vehicles'),
+    path('vehicles/create/', views.create_vehicle, name='create_vehicle'),
+    path('vehicles/<str:vehicle_slug>/', views.get_vehicle_detail, name='get_vehicle_detail'),
+    path('vehicles/<str:vehicle_slug>/update/', views.update_vehicle, name='update_vehicle'),
+    path('vehicles/<str:vehicle_slug>/delete/', views.delete_vehicle, name='delete_vehicle'),
+    
+    # Documents véhicules
+    path('vehicles/<str:vehicle_slug>/documents/', views.get_vehicle_documents, name='get_vehicle_documents'),
+    path('vehicles/<str:vehicle_slug>/documents/add/', views.add_vehicle_document, name='add_vehicle_document'),
+    path('vehicles/documents/<str:doc_slug>/update/', views.update_vehicle_document, name='update_vehicle_document'),
+    path('vehicles/documents/<str:doc_slug>/delete/', views.delete_vehicle_document, name='delete_vehicle_document'),
+    
+    # ==================== VALIDATION TRANSPORTEURS ====================
+    
+    path('admin/transporters/pending/', views.get_pending_transporters, name='get_pending_transporters'),
+    path('admin/transporters/<str:transporter_slug>/approve/', views.approve_transporter, name='approve_transporter'),
+    path('admin/transporters/<str:transporter_slug>/reject/', views.reject_transporter, name='reject_transporter'),
+    path('admin/transporters/<str:transporter_slug>/', views.get_transporter_details, name='get_transporter_details'),
+]
