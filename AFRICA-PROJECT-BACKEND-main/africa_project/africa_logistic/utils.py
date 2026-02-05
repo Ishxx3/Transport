@@ -22,7 +22,7 @@ def is_logged_in(view_func):
 
 def is_admin(view_func):
     def wrapper(request, *args, **kwargs):
-        if hasattr(request, 'user') and request.user.role == 'ADMIN':
+        if hasattr(request, 'user') and request.user.role.upper() == 'ADMIN':
             return view_func(request, *args, **kwargs)
         else:
             return JsonResponse({'error': 'Admin access required'}, status=403)
@@ -30,7 +30,7 @@ def is_admin(view_func):
 
 def is_data_admin(view_func):
     def wrapper(request, *args, **kwargs):
-        if hasattr(request, 'user') and request.user.role == 'DATA ADMIN':
+        if hasattr(request, 'user') and request.user.role.upper() == 'DATA ADMIN':
             return view_func(request, *args, **kwargs)
         else:
             return JsonResponse({'error': 'Data Admin access required'}, status=403)
@@ -73,7 +73,7 @@ def is_client(view_func):
     Décorateur pour vérifier si l'utilisateur est un client (PME, PARTICULIER, AGRICULTEUR)
     """
     def wrapper(request, *args, **kwargs):
-        if hasattr(request, 'user') and request.user.role in ['PME', 'PARTICULIER', 'AGRICULTEUR']:
+        if hasattr(request, 'user') and request.user.role in ['PME', 'PARTICULIER', 'AGRICULTEUR', 'CLIENT']:
             return view_func(request, *args, **kwargs)
         else:
             return JsonResponse({'error': 'Client access required'}, status=403)
@@ -100,7 +100,7 @@ def is_private_role(view_func):
 
 def is_moderator(view_func):
     def wrapper(request, *args, **kwargs):
-        if hasattr(request, 'user') and request.user.role == 'MODERATOR':
+        if hasattr(request, 'user') and request.user.role.upper() == 'MODERATOR':
             return view_func(request, *args, **kwargs)
         else:
             return JsonResponse({'error': 'Moderator access required'}, status=403)

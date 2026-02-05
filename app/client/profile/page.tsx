@@ -1,15 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Switch } from "@/components/ui/switch"
-import { User, Mail, Phone, MapPin, Shield, Bell, Eye, EyeOff, Save, Camera, CheckCircle2 } from "lucide-react"
+import { User, Mail, Phone, MapPin, Shield, Bell, Eye, EyeOff, Save, Camera, CheckCircle2, Loader2 } from "lucide-react"
 import { useAuth } from "@/lib/auth/context"
 import { createClient } from "@/lib/supabase/client"
+import { djangoApi } from "@/lib/api/django"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useLanguage } from "@/lib/i18n/context"
 
@@ -18,6 +19,7 @@ export default function ProfilePage() {
   const { t } = useLanguage()
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [isPrefLoading, setIsPrefLoading] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -27,6 +29,47 @@ export default function ProfilePage() {
   const [email, setEmail] = useState(user?.profile?.email || user?.email || "")
   const [phone, setPhone] = useState(user?.profile?.phone || "")
   const [address, setAddress] = useState(user?.profile?.address || "")
+
+  // Password state
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+
+  // Notification Preferences
+  const [prefs, setPrefs] = useState({
+    email_notifications: true,
+    sms_notifications: true,
+    push_notifications: true,
+    delivery_updates: true,
+    offers_promotions: false
+  })
+
+  useEffect(() => {
+    const fetchPrefs = async () => {
+      try {
+        const response = await djangoApi.getNotificationPreferences()
+        if (response.preferences) {
+          setPrefs(response.preferences)
+        }
+      } catch (error) {
+        console.error("Error fetching preferences:", error)
+      }
+    }
+    if (user?.id) fetchPrefs()
+  }, [user?.id])
+
+  const handleUpdatePrefs = async (key: string, value: boolean) => {
+    const newPrefs = { ...prefs, [key]: value }
+    setPrefs(newPrefs)
+    setIsPrefLoading(true)
+    try {
+      await djangoApi.updateNotificationPreferences(newPrefs)
+    } catch (error) {
+      console.error("Error updating preferences:", error)
+    } finally {
+      setIsPrefLoading(false)
+    }
+  }
 
   const initials = `${user?.profile?.first_name?.[0] || ""}${user?.profile?.last_name?.[0] || ""}`.toUpperCase() || "CL"
   const fullName = `${user?.profile?.first_name || ""} ${user?.profile?.last_name || ""}`.trim() || "Client"
@@ -41,27 +84,61 @@ export default function ProfilePage() {
     setError(null)
     setSuccess(null)
 
-    const supabase = createClient()
-
-    const { error: updateError } = await supabase
-      .from("profiles")
-      .update({
-        first_name: firstName,
-        last_name: lastName,
-        phone,
+    try {
+      const response = await djangoApi.updateProfile({
+        firstname: firstName,
+        lastname: lastName,
+        telephone: phone,
         address,
       })
-      .eq("id", user.id)
 
-    if (updateError) {
-      setError(t("profile.error"))
-      console.error(updateError)
-    } else {
-      setSuccess(t("profile.success"))
-      refreshUser()
+      if (response.error) {
+        setError(response.error)
+      } else {
+        setSuccess(t("profile.success"))
+        refreshUser()
+      }
+    } catch (err: any) {
+      setError(err.message || t("profile.error"))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleUpdatePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      setError(t("profile.passwords_do_not_match"))
+      return
     }
 
-    setIsLoading(false)
+    if (!currentPassword || !newPassword) {
+      setError(t("profile.all_fields_required"))
+      return
+    }
+
+    setIsLoading(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const response = await djangoApi.changePassword({
+        old_password: currentPassword,
+        new_password: newPassword,
+      })
+
+      if (response.error) {
+        setError(response.error)
+      } else {
+        setSuccess(t("profile.password_success"))
+        setCurrentPassword("")
+        setNewPassword("")
+        setConfirmPassword("")
+      }
+    } catch (err: any) {
+      setError(err.message || t("profile.password_error"))
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
@@ -256,6 +333,8 @@ export default function ProfilePage() {
                   <Input
                     id="currentPassword"
                     type={showPassword ? "text" : "password"}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
                     className="pr-10 bg-input border-border text-foreground"
                   />
                   <button
@@ -271,17 +350,33 @@ export default function ProfilePage() {
                 <Label htmlFor="newPassword" className="text-foreground">
                   {t("profile.new_password")}
                 </Label>
-                <Input id="newPassword" type="password" className="bg-input border-border text-foreground" />
+                <Input
+                  id="newPassword"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="bg-input border-border text-foreground"
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword" className="text-foreground">
                   {t("profile.confirm_password")}
                 </Label>
-                <Input id="confirmPassword" type="password" className="bg-input border-border text-foreground" />
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="bg-input border-border text-foreground"
+                />
               </div>
-              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
+              <Button
+                onClick={handleUpdatePassword}
+                disabled={isLoading}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+              >
                 <Save className="h-4 w-4" />
-                {t("profile.update_password")}
+                {isLoading ? t("profile.saving") : t("profile.update_password")}
               </Button>
             </CardContent>
           </Card>
@@ -300,18 +395,22 @@ export default function ProfilePage() {
             </CardHeader>
             <CardContent className="space-y-6">
               {[
-                { label: t("profile.email_notifications"), description: t("profile.email_notifications_desc") },
-                { label: t("profile.sms_notifications"), description: t("profile.sms_notifications_desc") },
-                { label: t("profile.push_notifications"), description: t("profile.push_notifications_desc") },
-                { label: t("profile.delivery_updates"), description: t("profile.delivery_updates_desc") },
-                { label: t("profile.offers_promotions"), description: t("profile.offers_promotions_desc") },
-              ].map((item, index) => (
-                <div key={index} className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
+                { id: "email_notifications", label: t("profile.email_notifications"), description: t("profile.email_notifications_desc") },
+                { id: "sms_notifications", label: t("profile.sms_notifications"), description: t("profile.sms_notifications_desc") },
+                { id: "push_notifications", label: t("profile.push_notifications"), description: t("profile.push_notifications_desc") },
+                { id: "delivery_updates", label: t("profile.delivery_updates"), description: t("profile.delivery_updates_desc") },
+                { id: "offers_promotions", label: t("profile.offers_promotions"), description: t("profile.offers_promotions_desc") },
+              ].map((item) => (
+                <div key={item.id} className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
                   <div>
                     <p className="font-medium text-foreground">{item.label}</p>
                     <p className="text-sm text-muted-foreground">{item.description}</p>
                   </div>
-                  <Switch defaultChecked={index < 4} />
+                  <Switch 
+                    checked={(prefs as any)[item.id]} 
+                    onCheckedChange={(checked) => handleUpdatePrefs(item.id, checked)}
+                    disabled={isPrefLoading}
+                  />
                 </div>
               ))}
             </CardContent>

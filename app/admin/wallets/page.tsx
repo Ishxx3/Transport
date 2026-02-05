@@ -22,6 +22,7 @@ import {
   RefreshCw,
 } from "lucide-react"
 import { useLanguage } from "@/lib/i18n/context"
+import { useAdminWallets, useAdminTransactions } from "@/lib/hooks/use-admin"
 
 export default function AdminWalletsPage() {
   const { t } = useLanguage()

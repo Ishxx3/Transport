@@ -14,9 +14,11 @@ urlpatterns = [
     path('auth/login/2fa/', views.send_2FA_after_checking, name='verify_2fa_code'),
     path('auth/login/2fa/verify/', views.check_login_with_2FA, name='check_login_with_2FA'),
     path('auth/resend-2fa/', views.resend_2FA_code, name='resend_2fa_code'),
+    path('auth/change-password/', views.change_password, name='change_password'),
     
     path('user/me/', views.get_connected_user, name='get_connected_user'),
     path('user/me/update/', views.update_infos, name='update_infos'),
+    path('user/notifications/preferences/', views.notification_preferences, name='notification_preferences'),
 
     # Wallet
     path('wallet/me/', views.get_my_wallet, name='get_my_wallet'),
@@ -27,6 +29,16 @@ urlpatterns = [
     path('notifications/', views.get_my_notifications, name='get_my_notifications'),
     path('notifications/read-all/', views.mark_all_notifications_read, name='mark_all_notifications_read'),
     path('notifications/<str:notif_slug>/read/', views.mark_notification_read, name='mark_notification_read'),
+
+    # Ratings
+    path('ratings/', views.rating_view, name='rating_view'),
+    path('ratings/me/', views.rating_view, name='get_my_ratings'),
+    
+    # Exports
+    path('reports/client/my-requests.csv', views.export_client_requests, name='export_client_requests'),
+    path('reports/transporter/my-missions.csv', views.export_transporter_missions, name='export_transporter_missions'),
+    path('reports/admin/requests.csv', views.export_admin_report, name='export_admin_report'),
+    path('reports/admin/users.csv', views.export_users_report, name='export_users_report'),
     
     path('data-admin/users/', views.get_users_by_data_admin, name='get_users_by_data_admin'),
     path('data-admin/user/<str:user_slug>/alter/', views.alter_user_by_data_admin, name='alter_user_by_data_admin'),
@@ -77,6 +89,9 @@ urlpatterns = [
     path('demandes/<str:request_slug>/update/', views.update_transport_request, name='update_demande'),
     path('demandes/<str:request_slug>/annuler/', views.cancel_request, name='annuler_demande'),
     path('demandes/<str:request_slug>/delete/', views.delete_transport_request, name='delete_demande'),
+    path('demandes/<str:request_slug>/documents/', views.get_request_documents, name='get_request_documents'),
+    path('demandes/<str:request_slug>/documents/upload/', views.upload_request_document, name='upload_request_document'),
+    path('demandes/documents/<str:document_slug>/delete/', views.delete_document, name='delete_request_document'),
     
     # ==================== ROUTES ADMIN ====================
     
@@ -86,10 +101,13 @@ urlpatterns = [
     # Gestion du statut et assignation
     path('admin/demandes/<str:request_slug>/statut/', views.update_status, name='admin_update_statut'),
     path('admin/demandes/<str:request_slug>/assign/', views.assign_transporter, name='assign_transporter'),
+    path('admin/demandes/<str:request_slug>/associate-tracker/', views.associate_tracker, name='associate_tracker'),
     
     # Statistiques et KPIs
     path('admin/statistics/', views.get_statistics, name='admin_statistics'),
     path('admin/kpis/', views.get_admin_kpis, name='admin_kpis'),
+    path('admin/finance/wallets/', views.get_all_wallets_by_admin, name='admin_wallets'),
+    path('admin/finance/transactions/', views.get_all_transactions_by_admin, name='admin_transactions'),
     
     # Suppression définitive et restauration
     path('admin/demandes/<str:request_slug>/hard-delete/', views.delete_transport_request, name='admin_hard_delete'),

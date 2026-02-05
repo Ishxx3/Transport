@@ -14,66 +14,71 @@ export default function AdminReportsPage() {
 
   const reportTypes = [
     {
-      id: "1",
+      id: "revenue",
       name: t("admin_reports.revenue_report"),
       description: t("admin_reports.revenue_report_desc"),
       icon: TrendingUp,
       color: "text-success",
       bgColor: "bg-success/10",
       lastGenerated: "2024-03-16",
-      format: "PDF",
+      format: "CSV",
     },
     {
-      id: "2",
+      id: "users",
       name: t("admin_reports.users_report"),
       description: t("admin_reports.users_report_desc"),
       icon: Users,
       color: "text-primary",
       bgColor: "bg-primary/10",
       lastGenerated: "2024-03-15",
-      format: "Excel",
+      format: "CSV",
     },
     {
-      id: "3",
+      id: "transporters",
       name: t("admin_reports.transporters_report"),
       description: t("admin_reports.transporters_report_desc"),
       icon: Truck,
       color: "text-accent",
       bgColor: "bg-accent/10",
       lastGenerated: "2024-03-14",
-      format: "PDF",
+      format: "CSV",
     },
     {
-      id: "4",
+      id: "requests",
       name: t("admin_reports.requests_report"),
       description: t("admin_reports.requests_report_desc"),
       icon: Package,
       color: "text-warning",
       bgColor: "bg-warning/10",
       lastGenerated: "2024-03-16",
-      format: "Excel",
+      format: "CSV",
     },
     {
-      id: "5",
+      id: "disputes",
       name: t("admin_reports.disputes_report"),
       description: t("admin_reports.disputes_report_desc"),
       icon: FileText,
       color: "text-destructive",
       bgColor: "bg-destructive/10",
       lastGenerated: "2024-03-13",
-      format: "PDF",
+      format: "CSV",
     },
     {
-      id: "6",
+      id: "geographic",
       name: t("admin_reports.geographic_report"),
       description: t("admin_reports.geographic_report_desc"),
       icon: BarChart3,
       color: "text-primary",
       bgColor: "bg-primary/10",
       lastGenerated: "2024-03-12",
-      format: "PDF",
+      format: "CSV",
     },
   ]
+
+  const handleGenerateReport = (typeId: string) => {
+    const DJANGO_API_URL = process.env.NEXT_PUBLIC_DJANGO_API_URL || 'http://localhost:8000/api/africa_logistic'
+    window.open(`${DJANGO_API_URL}/reports/admin/${typeId}.csv`, '_blank')
+  }
 
   const recentReports = [
     { name: `${t("admin_finance.revenue")} Mars 2024`, date: "2024-03-16 10:30", size: "2.4 MB", format: "PDF" },
@@ -187,7 +192,11 @@ export default function AdminReportsPage() {
                       <span className="text-xs text-muted-foreground">
                         {t("admin_reports.last_generated")}: {new Date(report.lastGenerated).toLocaleDateString("fr-FR")}
                       </span>
-                      <Button size="sm" className="h-8 bg-primary hover:bg-primary/90 text-primary-foreground">
+                      <Button 
+                        size="sm" 
+                        className="h-8 bg-primary hover:bg-primary/90 text-primary-foreground"
+                        onClick={() => handleGenerateReport(report.id)}
+                      >
                         <Download className="h-3 w-3 mr-1" />
                         {t("admin_reports.generate")}
                       </Button>

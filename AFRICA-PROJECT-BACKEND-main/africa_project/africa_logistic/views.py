@@ -6,7 +6,7 @@ import mimetypes
 from datetime import datetime
 from django.core.files.base import ContentFile
 from django.http import JsonResponse
-from africa_logistic.models import User, VerificationCode, User2FA, PasswordResetToken, UserConnect, TypeDocumentLegal, DocumentLegal, TransportRequest, RequestDocument, RequestStatusHistory, Vehicle, VehicleDocument, Wallet, WalletTransaction, Notification
+from africa_logistic.models import User, VerificationCode, User2FA, PasswordResetToken, UserConnect, TypeDocumentLegal, DocumentLegal, TransportRequest, RequestDocument, RequestStatusHistory, Vehicle, VehicleDocument, Wallet, WalletTransaction, Notification, Rating, NotificationPreference
 from africa_logistic.utils import is_logged_in, is_moderator, send_verify_account_mail, is_admin, is_data_admin, is_pme, is_agriculteur, is_particulier, is_transporteur, send_2FA_mail_with_template, send_reset_password_mail_with_template, is_private_role, is_client, is_transporteur, is_transporteur_or_admin, send_transporter_approval_mail, send_transporter_rejection_mail
 from django.http import HttpResponseRedirect
 from django.conf import settings
@@ -107,7 +107,7 @@ def register_user(request):
     
     # Pour les transporteurs, is_approved est False par défaut
     is_approved = False
-    if role != 'TRANSPORTEUR':
+    if role.upper() != 'TRANSPORTEUR':
         is_approved = True  # Les autres rôles sont approuvés automatiquement
     
     user = User(
@@ -865,8 +865,106 @@ def update_infos(request):
         return JsonResponse({'error': str(e)}, status=400)
 
 @csrf_exempt
-@require_http_methods(["POST"])
+@require_http_methods(["PATCH"])
 @is_logged_in
+def change_password(request):
+    user = request.user
+    data = json.loads(request.body)
+    old_password = data.get('old_password')
+    new_password = data.get('new_password')
+    
+    if not old_password or not new_password:
+        return JsonResponse({'error': 'L\'ancien et le nouveau mot de passe sont requis.'}, status=400)
+    
+    if user.check_password(old_password):
+        user.set_password(new_password)
+        user.save()
+        return JsonResponse({'message': 'Mot de passe modifié avec succès.'}, status=200)
+    else:
+        return JsonResponse({'error': 'Ancien mot de passe incorrect.'}, status=400)
+
+@csrf_exempt
+@require_http_methods(["GET", "PATCH"])
+@is_logged_in
+def notification_preferences(request):
+    user = request.user
+    from africa_logistic.models import NotificationPreference
+    prefs, created = NotificationPreference.objects.get_or_create(user=user)
+    
+    if request.method == "GET":
+        return JsonResponse({
+            'preferences': prefs.as_dict()
+        })
+    
+    elif request.method == "PATCH":
+        data = json.loads(request.body)
+        # Update fields dynamically
+        for field in [f.name for f in NotificationPreference._meta.fields if isinstance(f, models.BooleanField)]:
+            if field in data:
+                setattr(prefs, field, data[field])
+        prefs.save()
+        return JsonResponse({
+            'message': 'Préférences mises à jour.',
+            'preferences': prefs.as_dict()
+        })
+
+@csrf_exempt
+@require_http_methods(["POST", "GET"])
+@is_logged_in
+def rating_view(request):
+    from africa_logistic.models import Rating, TransportRequest
+    if request.method == "POST":
+        data = json.loads(request.body)
+        request_slug = data.get('transport_request_slug')
+        score = data.get('score')
+        comment = data.get('comment')
+        
+        try:
+            transport_request = TransportRequest.objects.get(slug=request_slug, client=request.user)
+            if transport_request.status != 'DELIVERED':
+                return JsonResponse({'error': 'Vous ne pouvez noter que les demandes livrées.'}, status=400)
+            
+            rating, created = Rating.objects.update_or_create(
+                transport_request=transport_request,
+                defaults={'score': score, 'comment': comment}
+            )
+            return JsonResponse({
+                'message': 'Note enregistrée avec succès.',
+                'rating': rating.as_dict()
+            })
+        except TransportRequest.DoesNotExist:
+            return JsonResponse({'error': 'Demande non trouvée.'}, status=404)
+            
+    elif request.method == "GET":
+        ratings = Rating.objects.filter(transport_request__client=request.user)
+        return JsonResponse({
+            'ratings': [r.as_dict() for r in ratings]
+        })
+
+@csrf_exempt
+@require_http_methods(["PATCH"])
+@is_logged_in
+@is_admin
+def associate_tracker(request, request_slug):
+    data = json.loads(request.body)
+    imei = data.get('tracker_imei')
+    
+    if not imei:
+        return JsonResponse({'error': 'IMEI requis.'}, status=400)
+        
+    try:
+        transport_request = TransportRequest.objects.get(slug=request_slug)
+        transport_request.tracker_imei = imei
+        transport_request.save()
+        return JsonResponse({
+            'message': 'Tracker associé avec succès.',
+            'transport_request': transport_request.as_dict()
+        })
+    except TransportRequest.DoesNotExist:
+        return JsonResponse({'error': 'Demande non trouvée.'}, status=404)
+
+@csrf_exempt
+@require_http_methods(["POST"])
 @is_data_admin
 def add_type_legal_document_by_data_admin(request):
     data = json.loads(request.body)
@@ -1136,7 +1234,116 @@ def get_my_legal_documents(request):
         'message': "Vos documents récupérés avec succès.",
         'documents': [doc.as_dict() for doc in documents]
     }, status = 200)
+
+import csv
+from django.http import HttpResponse
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@is_logged_in
+def export_client_requests(request):
+    """Export client requests to CSV"""
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="my-requests.csv"'
     
+    writer = csv.writer(response)
+    writer.writerow(['ID', 'Titre', 'Type', 'Poids', 'Statut', 'Date Collecte', 'Lieu Collecte', 'Lieu Livraison'])
+    
+    requests = TransportRequest.objects.filter(client=request.user)
+    for r in requests:
+        writer.writerow([
+            r.slug, 
+            r.title, 
+            r.merchandise_type, 
+            r.weight, 
+            r.status, 
+            r.preferred_pickup_date, 
+            r.pickup_address, 
+            r.delivery_address
+        ])
+    
+    return response
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@is_logged_in
+@is_transporteur
+def export_transporter_missions(request):
+    """Export transporter missions to CSV"""
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="my-missions.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['ID', 'Titre', 'Client', 'Statut', 'Date Collecte', 'Lieu Collecte', 'Lieu Livraison'])
+    
+    missions = TransportRequest.objects.filter(assigned_transporter=request.user)
+    for m in missions:
+        writer.writerow([
+            m.slug, 
+            m.title, 
+            m.client.presentation(), 
+            m.status, 
+            m.preferred_pickup_date, 
+            m.pickup_address, 
+            m.delivery_address
+        ])
+    
+    return response
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@is_logged_in
+@is_admin
+def export_admin_report(request):
+    """Export all requests report for admin"""
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="all-requests-report.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['ID', 'Client', 'Transporteur', 'Titre', 'Statut', 'Date Création', 'Prix Estimé'])
+    
+    requests = TransportRequest.objects.all_with_deleted()
+    for r in requests:
+        transporter = r.assigned_transporter.presentation() if r.assigned_transporter else "N/A"
+        writer.writerow([
+            r.slug, 
+            r.client.presentation(), 
+            transporter, 
+            r.title, 
+            r.status, 
+            r.created_at, 
+            r.estimated_price
+        ])
+    
+    return response
+    
+@csrf_exempt
+@require_http_methods(["GET"])
+@is_logged_in
+@is_admin
+def export_users_report(request):
+    """Export all users report for admin"""
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="all-users-report.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['ID', 'Nom Complet', 'Email', 'Téléphone', 'Rôle', 'Vérifié', 'Statut', 'Date Création'])
+    
+    users = User.objects.all_with_deleted()
+    for u in users:
+        writer.writerow([
+            u.slug, 
+            u.presentation(), 
+            u.email, 
+            u.telephone, 
+            u.role, 
+            "Oui" if u.is_verified else "Non",
+            "Actif" if u.is_active else "Inactif", 
+            u.created_at
+        ])
+    
+    return response
+
 @csrf_exempt
 @require_http_methods(["GET"])
 @is_logged_in
@@ -1369,7 +1576,7 @@ def get_transport_request_detail(request, request_slug):
     
     # Vérification des permissions
     user = request.user
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         if user.role in ['PME', 'PARTICULIER', 'AGRICULTEUR']:
             if transport_request.client != user:
                 return JsonResponse({'error': 'Accès non autorisé.'}, status=403)
@@ -1409,7 +1616,7 @@ def update_transport_request(request, request_slug):
     user = request.user
     
     # Vérification des permissions
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         if transport_request.client != user:
             return JsonResponse({'error': 'Vous ne pouvez modifier que vos propres demandes.'}, status=403)
     
@@ -1472,7 +1679,7 @@ def delete_transport_request(request, request_slug):
     user = request.user
     
     # Vérification des permissions
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         if transport_request.client != user:
             return JsonResponse({'error': 'Vous ne pouvez supprimer que vos propres demandes.'}, status=403)
     
@@ -1651,7 +1858,7 @@ def upload_document(request, request_slug):
     user = request.user
     
     # Vérifier les permissions
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         if user.role in ['PME', 'PARTICULIER', 'AGRICULTEUR']:
             if transport_request.client != user:
                 return JsonResponse({'error': 'Accès non autorisé.'}, status=403)
@@ -1684,7 +1891,7 @@ def delete_document(request, document_slug):
     user = request.user
     
     # Vérifier les permissions
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         if document.transport_request.client != user:
             return JsonResponse({'error': 'Vous ne pouvez supprimer que vos propres documents.'}, status=403)
     
@@ -1712,7 +1919,7 @@ def get_status_history(request, request_slug):
     user = request.user
     
     # Vérifier les permissions
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         if user.role in ['PME', 'PARTICULIER', 'AGRICULTEUR']:
             if transport_request.client != user:
                 return JsonResponse({'error': 'Accès non autorisé.'}, status=403)
@@ -1733,7 +1940,6 @@ def get_status_history(request, request_slug):
 @csrf_exempt
 @require_http_methods(["GET"])
 @is_logged_in
-@is_client
 def get_my_requests(request):
     """
     Récupérer les demandes de l'utilisateur connecté
@@ -1881,19 +2087,19 @@ def get_admin_kpis(request):
     from django.db.models import Sum
     
     # Counts by role
-    total_clients = User.objects.filter(role__in=['PME', 'PARTICULIER', 'AGRICULTEUR']).count()
-    total_transporters = User.objects.filter(role='TRANSPORTEUR').count()
-    total_moderators = User.objects.filter(role='MODERATOR').count()
+    total_clients = User.objects.filter(role__in=['PME', 'PARTICULIER', 'AGRICULTEUR', 'CLIENT']).count()
+    total_transporters = User.objects.filter(role__iexact='TRANSPORTEUR').count()
+    total_moderators = User.objects.filter(role__iexact='MODERATOR').count()
     
     # Request stats
     total_requests = TransportRequest.objects.count()
-    completed_requests = TransportRequest.objects.filter(status='DELIVERED').count()
-    pending_requests = TransportRequest.objects.filter(status='PENDING').count()
-    in_progress_requests = TransportRequest.objects.filter(status__in=['ASSIGNED', 'IN_PROGRESS']).count()
+    completed_requests = TransportRequest.objects.filter(status__iexact='DELIVERED').count()
+    pending_requests = TransportRequest.objects.filter(status__iexact='PENDING').count()
+    in_progress_requests = TransportRequest.objects.filter(status__in=['ASSIGNED', 'IN_PROGRESS', 'assigned', 'in_progress']).count()
     
     # Revenue (using estimated_price as fallback since no platform_commission field yet)
     # In a real app, you'd have a commission field
-    total_revenue = TransportRequest.objects.filter(status='DELIVERED').aggregate(total=Sum('estimated_price'))['total'] or 0
+    total_revenue = TransportRequest.objects.filter(status__iexact='DELIVERED').aggregate(total=Sum('estimated_price'))['total'] or 0
     
     # Delivery rate
     delivery_rate = 0
@@ -1904,6 +2110,10 @@ def get_admin_kpis(request):
     today = timezone.now().date()
     today_requests = TransportRequest.objects.filter(created_at__date=today).count()
     
+    # Wallets info
+    total_client_balance = Wallet.objects.filter(user__role__in=['PME', 'PARTICULIER', 'AGRICULTEUR', 'CLIENT']).aggregate(total=Sum('balance'))['total'] or 0
+    total_transporter_balance = Wallet.objects.filter(user__role__iexact='TRANSPORTEUR').aggregate(total=Sum('balance'))['total'] or 0
+    
     return JsonResponse({
         'total_clients': total_clients,
         'total_transporters': total_transporters,
@@ -1913,10 +2123,10 @@ def get_admin_kpis(request):
         'pending_requests': pending_requests,
         'in_progress_requests': in_progress_requests,
         'total_revenue': float(total_revenue),
-        'open_disputes': 0,  # Placeholder
-        'total_client_balance': 0,  # Placeholder
-        'total_transporter_balance': 0,  # Placeholder
-        'today_transactions': today_requests,  # Using new requests as a proxy for activity
+        'open_disputes': 0,  
+        'total_client_balance': float(total_client_balance),
+        'total_transporter_balance': float(total_transporter_balance),
+        'today_transactions': today_requests,  
         'delivery_rate': f"{delivery_rate:.1f}"
     }, status=200)
 
@@ -1965,7 +2175,7 @@ def get_all_requests_by_admin(request):
     """
     user = request.user
     
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         return JsonResponse({'error': 'Accès réservé aux administrateurs.'}, status=403)
     
     include_deleted = request.GET.get('include_deleted', 'false').lower() == 'true'
@@ -2011,7 +2221,7 @@ def cancel_request(request, request_slug):
     user = request.user
     
     # Vérifier les permissions
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         if transport_request.client != user:
             return JsonResponse({'error': 'Vous ne pouvez annuler que vos propres demandes.'}, status=403)
     
@@ -2043,7 +2253,24 @@ def cancel_request(request, request_slug):
         'message': 'Demande annulée avec succès.',
         'transport_request': transport_request.as_dict()
     }, status=200)
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+
+
+# ==================== UPLOADER UN DOCUMENT ====================
+
+@csrf_exempt
+@require_http_methods(["POST"])
+@is_logged_in
+def upload_request_document(request, request_slug):
+    """
+    Uploader un document pour une demande
+    """
+    try:
+        transport_request = TransportRequest.objects.get(slug=request_slug)
+    except TransportRequest.DoesNotExist:
+        return JsonResponse({'error': 'Demande non trouvée.'}, status=404)
+
+    user = request.user
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         if transport_request.client != user:
             return JsonResponse({'error': 'Vous ne pouvez uploader des documents que sur vos propres demandes.'}, status=403)
     
@@ -2114,7 +2341,7 @@ def get_request_documents(request, request_slug):
     user = request.user
     
     # Vérifier les permissions
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         if transport_request.client != user:
             return JsonResponse({'error': 'Vous ne pouvez uploader des documents que sur vos propres demandes.'}, status=403)
 
@@ -2235,7 +2462,7 @@ def get_vehicle_detail(request, vehicle_slug):
     user = request.user
     
     # Vérification des permissions
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         if vehicle.owner != user:
             return JsonResponse({'error': 'Accès non autorisé.'}, status=403)
     
@@ -2265,7 +2492,7 @@ def update_vehicle(request, vehicle_slug):
     user = request.user
     
     # Vérification des permissions
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         if vehicle.owner != user:
             return JsonResponse({'error': 'Vous ne pouvez modifier que vos propres véhicules.'}, status=403)
     
@@ -2334,7 +2561,7 @@ def delete_vehicle(request, vehicle_slug):
     user = request.user
     
     # Vérification des permissions
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         if vehicle.owner != user:
             return JsonResponse({'error': 'Vous ne pouvez supprimer que vos propres véhicules.'}, status=403)
     
@@ -2362,7 +2589,7 @@ def add_vehicle_document(request, vehicle_slug):
     user = request.user
     
     # Vérification des permissions
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         if vehicle.owner != user:
             return JsonResponse({'error': 'Vous ne pouvez ajouter des documents qu\'à vos propres véhicules.'}, status=403)
     
@@ -2455,7 +2682,7 @@ def update_vehicle_document(request, doc_slug):
     vehicle = document.vehicle
     
     # Vérification des permissions
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         if vehicle.owner != user:
             return JsonResponse({'error': 'Vous ne pouvez modifier que les documents de vos propres véhicules.'}, status=403)
     
@@ -2545,7 +2772,7 @@ def delete_vehicle_document(request, doc_slug):
     vehicle = document.vehicle
     
     # Vérification des permissions
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         if vehicle.owner != user:
             return JsonResponse({'error': 'Vous ne pouvez supprimer que les documents de vos propres véhicules.'}, status=403)
     
@@ -2571,7 +2798,7 @@ def get_vehicle_documents(request, vehicle_slug):
     user = request.user
     
     # Vérification des permissions
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         if vehicle.owner != user:
             return JsonResponse({'error': 'Accès non autorisé.'}, status=403)
     
@@ -2593,10 +2820,10 @@ def get_pending_transporters(request):
     Récupérer la liste des transporteurs en attente d'approbation
     """
     user = request.user
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         return JsonResponse({'error': 'Accès non autorisé.'}, status=403)
     
-    transporters = User.objects.filter(role='TRANSPORTEUR', is_approved=False).order_by('-created_at')
+    transporters = User.objects.filter(role__iexact='TRANSPORTEUR', is_approved=False).order_by('-created_at')
     
     return JsonResponse({
         'message': 'Liste des transporteurs en attente récupérée avec succès.',
@@ -2612,7 +2839,7 @@ def approve_transporter(request, transporter_slug):
     Approuver un transporteur
     """
     user = request.user
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         return JsonResponse({'error': 'Accès non autorisé.'}, status=403)
     
     try:
@@ -2649,7 +2876,7 @@ def reject_transporter(request, transporter_slug):
     Rejeter un transporteur (demande d'informations complémentaires)
     """
     user = request.user
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         return JsonResponse({'error': 'Accès non autorisé.'}, status=403)
     
     try:
@@ -2683,7 +2910,7 @@ def get_transporter_details(request, transporter_slug):
     Récupérer les détails d'un transporteur (pour validation admin)
     """
     user = request.user
-    if user.role not in ['ADMIN', 'DATA ADMIN']:
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
         return JsonResponse({'error': 'Accès non autorisé.'}, status=403)
     
     try:
@@ -2705,3 +2932,44 @@ def get_transporter_details(request, transporter_slug):
         'message': 'Détails du transporteur récupérés avec succès.',
         'transporter': data
     }, status=200)
+
+
+# ==================== GESTION FINANCIÈRE ADMIN ====================
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@is_logged_in
+def get_all_wallets_by_admin(request):
+    """
+    Récupérer tous les portefeuilles
+    """
+    user = request.user
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
+        return JsonResponse({'error': 'Accès non autorisé.'}, status=403)
+    
+    wallets = Wallet.objects.all().order_by('-balance')
+    
+    return JsonResponse({
+        'message': 'Liste des portefeuilles récupérée avec succès.',
+        'wallets': [w.as_dict(include_related=True) for w in wallets]
+    }, status=200)
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@is_logged_in
+def get_all_transactions_by_admin(request):
+    """
+    Récupérer toutes les transactions
+    """
+    user = request.user
+    if user.role.upper() not in ['ADMIN', 'DATA ADMIN']:
+        return JsonResponse({'error': 'Accès non autorisé.'}, status=403)
+    
+    limit = int(request.GET.get('limit', 100))
+    txs = WalletTransaction.objects.all().order_by('-created_at')[:limit]
+    
+    return JsonResponse({
+        'message': 'Liste des transactions récupérée avec succès.',
+        'transactions': [tx.as_dict(include_related=True) for tx in txs]
+    }, status=200)
+

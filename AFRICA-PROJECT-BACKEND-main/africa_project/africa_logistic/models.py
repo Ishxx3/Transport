@@ -458,6 +458,9 @@ class TransportRequest(BaseModel):
     recipient_phone = models.CharField(max_length=15)
     recipient_email = models.EmailField(blank=True, null=True)
     
+    # Tracking
+    tracker_imei = models.CharField(max_length=20, blank=True, null=True, help_text="IMEI du tracker A-Tracker associé")
+    
     class Meta:
         ordering = ['-created_at']
         verbose_name = "Demande de transport"
@@ -637,4 +640,53 @@ class VehicleDocument(BaseModel):
     
     def __str__(self):
         return f"{self.vehicle.plate_number} - {dict(self.DOCUMENT_TYPES).get(self.document_type)}"
+
+
+class Rating(BaseModel):
+    """
+    Notes et avis sur une demande de transport
+    """
+    transport_request = models.OneToOneField(
+        TransportRequest, 
+        on_delete=models.CASCADE, 
+        related_name='rating'
+    )
+    score = models.IntegerField(validators=[MinValueValidator(1)])
+    comment = models.TextField(blank=True, null=True)
+
+    class Meta:
+        verbose_name = "Note"
+        verbose_name_plural = "Notes"
+
+    def __str__(self):
+        return f"Rating for {self.transport_request.title}: {self.score}/5"
+
+
+class NotificationPreference(BaseModel):
+    """
+    Préférences de notification par utilisateur
+    """
+    user = models.OneToOneField(
+        User, 
+        on_delete=models.CASCADE, 
+        related_name='notification_preferences'
+    )
+    # Client prefs
+    email_notifications = models.BooleanField(default=True)
+    sms_notifications = models.BooleanField(default=True)
+    push_notifications = models.BooleanField(default=True)
+    delivery_updates = models.BooleanField(default=True)
+    offers_promotions = models.BooleanField(default=False)
+    
+    # Transporter specific prefs
+    new_missions = models.BooleanField(default=True)
+    mission_updates = models.BooleanField(default=True)
+    vehicle_reminders = models.BooleanField(default=True)
+
+    class Meta:
+        verbose_name = "Préférence de notification"
+        verbose_name_plural = "Préférences de notification"
+
+    def __str__(self):
+        return f"Prefs for {self.user.presentation()}"
 

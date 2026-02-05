@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
-import { Search, Filter, MoreHorizontal, Eye, Ban, CheckCircle, UserCheck, Wallet, Users, Truck } from "lucide-react"
+import { Search, Filter, MoreHorizontal, Eye, Ban, CheckCircle, UserCheck, Wallet, Users, Truck, Download } from "lucide-react"
 import { useAdminUsers, suspendUser, activateUser, verifyTransporter } from "@/lib/hooks/use-admin"
 import { mutate } from "swr"
 import { useLanguage } from "@/lib/i18n/context"
@@ -84,9 +84,19 @@ export default function AdminUsersPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Gestion des utilisateurs</h1>
-        <p className="text-muted-foreground">Gérez les comptes clients, transporteurs et modérateurs</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Gestion des utilisateurs</h1>
+          <p className="text-muted-foreground">Gérez les comptes clients, transporteurs et modérateurs</p>
+        </div>
+        <Button 
+          variant="outline" 
+          className="border-border text-muted-foreground hover:text-foreground"
+          onClick={() => window.open(process.env.NEXT_PUBLIC_DJANGO_API_URL + '/api/africa_logistic/reports/admin/users.csv')}
+        >
+          <Download className="mr-2 h-4 w-4" />
+          Exporter CSV
+        </Button>
       </div>
 
       {/* Stats */}

@@ -43,7 +43,7 @@ export default function PendingTransportersPage() {
   const [rejectReason, setRejectReason] = useState("")
 
   useEffect(() => {
-    if (user && (user.profile?.role === "admin" || user.profile?.role === "moderator")) {
+    if (user && (user.role?.toUpperCase() === "ADMIN" || user.role?.toUpperCase() === "MODERATOR")) {
       loadPendingTransporters()
     } else {
       router.push("/auth/login")

@@ -47,12 +47,12 @@ export default function AdminDashboard() {
   const { t } = useLanguage()
 
   const statusConfig: Record<string, { label: string; color: string }> = {
-    pending: { label: "En attente", color: "bg-warning/10 text-warning border-warning/20" },
-    validated: { label: "Assigné", color: "bg-primary/10 text-primary border-primary/20" },
-    assigned: { label: "Assigné", color: "bg-accent/10 text-accent border-accent/20" },
-    in_progress: { label: "En cours", color: "bg-primary/10 text-primary border-primary/20" },
-    completed: { label: t("common.completed"), color: "bg-success/10 text-success border-success/20" },
-    cancelled: { label: "Annulé", color: "bg-destructive/10 text-destructive border-destructive/20" },
+    PENDING: { label: "En attente", color: "bg-warning/10 text-warning border-warning/20" },
+    VALIDATED: { label: "Validé", color: "bg-primary/10 text-primary border-primary/20" },
+    ASSIGNED: { label: "Assigné", color: "bg-accent/10 text-accent border-accent/20" },
+    IN_PROGRESS: { label: "En cours", color: "bg-primary/10 text-primary border-primary/20" },
+    DELIVERED: { label: t("common.completed"), color: "bg-success/10 text-success border-success/20" },
+    CANCELLED: { label: "Annulé", color: "bg-destructive/10 text-destructive border-destructive/20" },
   }
   const { data: kpis, isLoading: kpisLoading } = useAdminKPIs()
   const { data: users } = useAdminUsers()
@@ -316,32 +316,30 @@ export default function AdminDashboard() {
                 <div className="flex items-center gap-3">
                   <div
                     className={`rounded-full p-2 ${
-                      tx.type === "credit" ? "bg-success/10" : tx.type === "penalty" ? "bg-warning/10" : "bg-muted"
+                      tx.tx_type === "CREDIT" ? "bg-success/10" : "bg-destructive/10"
                     }`}
                   >
-                    {tx.type === "credit" ? (
+                    {tx.tx_type === "CREDIT" ? (
                       <ArrowUpRight className="h-4 w-4 text-success" />
                     ) : (
-                      <ArrowDownRight
-                        className={`h-4 w-4 ${tx.type === "penalty" ? "text-warning" : "text-destructive"}`}
-                      />
+                      <ArrowDownRight className="h-4 w-4 text-destructive" />
                     )}
                   </div>
                   <div>
                     <p className="text-sm font-medium text-foreground">
-                      {tx.wallet?.user?.first_name} {tx.wallet?.user?.last_name}
+                      {tx.wallet?.user?.firstname} {tx.wallet?.user?.lastname}
                     </p>
-                    <p className="text-xs text-muted-foreground">{tx.description || tx.type}</p>
+                    <p className="text-xs text-muted-foreground">{tx.description || tx.tx_type}</p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p
                     className={`text-sm font-semibold ${
-                      tx.type === "credit" ? "text-success" : tx.type === "penalty" ? "text-warning" : "text-foreground"
+                      tx.tx_type === "CREDIT" ? "text-success" : "text-destructive"
                     }`}
                   >
-                    {tx.type === "credit" ? "+" : "-"}
-                    {tx.amount?.toLocaleString()} FCFA
+                    {tx.tx_type === "CREDIT" ? "+" : "-"}
+                    {Number(tx.amount).toLocaleString()} FCFA
                   </p>
                   <p className="text-xs text-muted-foreground">
                     {new Date(tx.created_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}

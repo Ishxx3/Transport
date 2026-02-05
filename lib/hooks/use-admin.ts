@@ -27,10 +27,20 @@ export function useAdminTransactions(limit = 10) {
   return useSWR<(WalletTransaction & { wallet: Wallet & { user: Profile } })[]>(
     ["admin-transactions", limit],
     async () => {
-      // Pour l'instant, pas de transactions détaillées côté Django → on retourne un tableau vide
-      return []
+      const res = await djangoApi.getAdminTransactions(limit)
+      if (res.error) throw new Error(res.error)
+      return (res.transactions as any) || []
     },
   )
+}
+
+// Fetch all wallets for admin
+export function useAdminWallets() {
+  return useSWR<(Wallet & { user: Profile })[]>("admin-wallets", async () => {
+    const res = await djangoApi.getAdminWallets()
+    if (res.error) throw new Error(res.error)
+    return (res.wallets as any) || []
+  })
 }
 
 // Fetch recent requests for admin

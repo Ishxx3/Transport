@@ -158,6 +158,30 @@ class DjangoApiClient {
     return response
   }
 
+  async updateProfile(data: {
+    firstname?: string
+    lastname?: string
+    telephone?: string
+    address?: string
+    photo?: string
+    ext?: string
+  }) {
+    return this.request<{ user: any }>('/user/me/update/', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async changePassword(data: {
+    old_password: string
+    new_password: string
+  }) {
+    return this.request('/auth/change-password/', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    })
+  }
+
   // ==================== WALLET ====================
 
   async getMyWallet() {
@@ -376,6 +400,14 @@ class DjangoApiClient {
     return this.request<{ users: any[]; nb: number }>(endpoint)
   }
 
+  async getAdminTransactions(limit = 10) {
+    return this.request<{ transactions: any[] }>(`/admin/finance/transactions/?limit=${limit}`)
+  }
+
+  async getAdminWallets() {
+    return this.request<{ wallets: any[] }>('/admin/finance/wallets/')
+  }
+
   async getAdminRequests(params?: { limit?: number; include_deleted?: boolean }) {
     let endpoint = '/admin/demandes/'
     const queryParams = new URLSearchParams()
@@ -456,6 +488,13 @@ class DjangoApiClient {
     })
   }
 
+  async adminAssociateTracker(requestSlug: string, imei: string) {
+    return this.request<{ transport_request: any }>(`/admin/demandes/${requestSlug}/associate-tracker/`, {
+      method: 'PATCH',
+      body: JSON.stringify({ tracker_imei: imei }),
+    })
+  }
+
   async getTransportRequestDetail(slug: string) {
     return this.request<{ transport_request: any }>(`/demandes/${slug}/`)
   }
@@ -469,6 +508,36 @@ class DjangoApiClient {
   async markAllNotificationsRead() {
     return this.request('/notifications/read-all/', {
       method: 'POST',
+    })
+  }
+
+  // ==================== RATINGS ====================
+
+  async getMyRatings() {
+    return this.request<{ ratings: any[] }>('/ratings/me/')
+  }
+
+  async createRating(data: {
+    transport_request_slug: string
+    score: number
+    comment?: string
+  }) {
+    return this.request<{ rating: any }>('/ratings/', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  // ==================== PREFERENCES ====================
+
+  async getNotificationPreferences() {
+    return this.request<{ preferences: any }>('/user/notifications/preferences/')
+  }
+
+  async updateNotificationPreferences(preferences: any) {
+    return this.request<{ preferences: any }>('/user/notifications/preferences/', {
+      method: 'PATCH',
+      body: JSON.stringify(preferences),
     })
   }
 }

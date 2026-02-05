@@ -28,74 +28,34 @@ import { TrackerDevicesList } from "@/components/tracking/tracker-devices-list"
 import { useTrackerDevices, useAllTrackerPositions, useTrackerAlerts } from "@/lib/hooks/use-tracker"
 import type { IOPGPSDevice } from "@/lib/services/a-tracker"
 import { useLanguage } from "@/lib/i18n/context"
+import useSWR from "swr"
+import { djangoApi } from "@/lib/api/django"
 
-// Missions de démonstration
-const mockActiveMissions = [
-  {
-    id: "MIS-001",
-    transporter: { first_name: "Kouassi", last_name: "Yao", phone: "+225 07 12 34 56" },
-    client: { first_name: "Jean", last_name: "Dupont", phone: "+225 01 23 45 67" },
-    pickup_city: "Abidjan",
-    pickup_lat: 5.3600,
-    pickup_lng: -4.0083,
-    delivery_city: "Accra",
-    delivery_lat: 5.6037,
-    delivery_lng: -0.1870,
-    status: "in_transit",
-    progress: 65,
-    eta: "2h 30min",
-    last_update: "Il y a 5 min",
-    vehicle: "Camion - AB 1234 CI",
-    tracker_imei: "123456789012345",
-  },
-  {
-    id: "MIS-002",
-    transporter: { first_name: "Mamadou", last_name: "Diallo", phone: "+221 77 123 45 67" },
-    client: { first_name: "Marie", last_name: "Koné", phone: "+221 78 987 65 43" },
-    pickup_city: "Dakar",
-    pickup_lat: 14.7167,
-    pickup_lng: -17.4677,
-    delivery_city: "Bamako",
-    delivery_lat: 12.6392,
-    delivery_lng: -8.0029,
-    status: "picked_up",
-    progress: 25,
-    eta: "8h 45min",
-    last_update: "Il y a 15 min",
-    vehicle: "Camion frigorifique - DK 5678 SN",
-    tracker_imei: "123456789012346",
-  },
-  {
-    id: "MIS-003",
-    transporter: { first_name: "Kofi", last_name: "Mensah", phone: "+233 24 123 4567" },
-    client: { first_name: "Amadou", last_name: "Traoré", phone: "+228 90 12 34 56" },
-    pickup_city: "Lomé",
-    pickup_lat: 6.1319,
-    pickup_lng: 1.2228,
-    delivery_city: "Cotonou",
-    delivery_lat: 6.3654,
-    delivery_lng: 2.4183,
-    status: "in_transit",
-    progress: 85,
-    eta: "45min",
-    last_update: "Il y a 2 min",
-    vehicle: "Camion benne - LM 9012 TG",
-    tracker_imei: "123456789012347",
-  },
-]
+// Fin des imports
 
 export default function ModeratorTrackingPage() {
   const { t } = useLanguage()
 
   const statusConfig: Record<string, { label: string; color: string }> = {
-    assigned: { label: "Assigné", color: "bg-secondary text-secondary-foreground" },
-    picked_up: { label: "Enlevé", color: "bg-warning/20 text-warning" },
-    in_transit: { label: "En transit", color: "bg-primary/20 text-primary" },
+    ASSIGNED: { label: "Assigné", color: "bg-secondary text-secondary-foreground" },
+    IN_PROGRESS: { label: "En transit", color: "bg-primary/20 text-primary" },
+    DELIVERED: { label: "Livré", color: "bg-success/20 text-success" },
   }
 
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
-  const [selectedMission, setSelectedMission] = useState<(typeof mockActiveMissions)[0] | null>(null)
+
+  // Récupération des missions réelles depuis Django
+  const { data: requests = [], isLoading: requestsLoading } = useSWR("active-missions", async () => {
+    const res = await djangoApi.getAdminRequests()
+    if (res.error) throw new Error(res.error)
+    // On ne garde que les missions assignées ou en cours
+    return (res.requests || []).filter((r: any) => 
+      ["ASSIGNED", "IN_PROGRESS"].includes(r.status) && r.tracker_imei
+    )
+  })
+
+  const [selectedMission, setSelectedMission] = useState<any>(null)
   const [selectedDevice, setSelectedDevice] = useState<IOPGPSDevice | null>(null)
   const [activeTab, setActiveTab] = useState("missions")
 
@@ -104,13 +64,13 @@ export default function ModeratorTrackingPage() {
   const { data: allPositions } = useAllTrackerPositions()
   const { data: alerts } = useTrackerAlerts()
 
-  const filteredMissions = mockActiveMissions.filter((m) => {
+  const filteredMissions = requests.filter((m: any) => {
     const matchesSearch =
       !searchQuery ||
-      m.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.transporter.first_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.pickup_city.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.delivery_city.toLowerCase().includes(searchQuery.toLowerCase())
+      (m.slug || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (m.assigned_transporter?.first_name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (m.pickup_city || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (m.delivery_city || "").toLowerCase().includes(searchQuery.toLowerCase())
 
     const matchesStatus = statusFilter === "all" || m.status === statusFilter
 
@@ -151,7 +111,7 @@ export default function ModeratorTrackingPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold text-foreground">{mockActiveMissions.length}</p>
+                <p className="text-2xl font-bold text-foreground">{requests.length}</p>
                 <p className="text-xs text-muted-foreground">{t("moderator_tracking.active_missions")}</p>
               </div>
               <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -165,7 +125,7 @@ export default function ModeratorTrackingPage() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-2xl font-bold text-foreground">
-                  {mockActiveMissions.filter((m) => m.status === "in_transit").length}
+                  {requests.filter((m: any) => m.status === "IN_PROGRESS").length}
                 </p>
                 <p className="text-xs text-muted-foreground">{"En transit"}</p>
               </div>
@@ -263,8 +223,8 @@ export default function ModeratorTrackingPage() {
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">{t("requests.all")}</SelectItem>
-                        <SelectItem value="picked_up">{"Enlevé"}</SelectItem>
-                        <SelectItem value="in_transit">{"En transit"}</SelectItem>
+                        <SelectItem value="ASSIGNED">{"Assigné"}</SelectItem>
+                        <SelectItem value="IN_PROGRESS">{"En transit"}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -276,11 +236,11 @@ export default function ModeratorTrackingPage() {
                   <CardTitle className="text-foreground text-base">{t("moderator_tracking.ongoing_missions")}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 max-h-[400px] overflow-y-auto">
-                  {filteredMissions.map((mission) => (
+                  {filteredMissions.map((mission: any) => (
                     <div
-                      key={mission.id}
+                      key={mission.slug}
                       className={`p-3 rounded-lg transition-colors cursor-pointer ${
-                        selectedMission?.id === mission.id
+                        selectedMission?.slug === mission.slug
                           ? "bg-primary/10 border border-primary/30"
                           : "bg-secondary/50 hover:bg-secondary/70"
                       }`}
@@ -290,15 +250,15 @@ export default function ModeratorTrackingPage() {
                         <div className="flex items-center gap-2">
                           <Avatar className="h-8 w-8">
                             <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                              {mission.transporter.first_name[0]}
-                              {mission.transporter.last_name[0]}
+                              {mission.assigned_transporter?.first_name?.[0] || "T"}
+                              {mission.assigned_transporter?.last_name?.[0] || ""}
                             </AvatarFallback>
                           </Avatar>
                           <div>
                             <p className="text-sm font-medium text-foreground">
-                              {mission.transporter.first_name} {mission.transporter.last_name}
+                              {mission.assigned_transporter?.first_name} {mission.assigned_transporter?.last_name}
                             </p>
-                            <p className="text-xs text-muted-foreground">{mission.vehicle}</p>
+                            <p className="text-xs text-muted-foreground">{mission.vehicle?.brand} {mission.vehicle?.model}</p>
                           </div>
                         </div>
                         <Badge className={statusConfig[mission.status]?.color}>
@@ -311,15 +271,16 @@ export default function ModeratorTrackingPage() {
                         {mission.pickup_city} → {mission.delivery_city}
                       </div>
 
+                      {/* On simule un progrès basé sur le statut pour l'instant */}
                       <div className="space-y-1 mb-2">
                         <div className="flex justify-between text-xs">
                           <span className="text-muted-foreground">{t("moderator_tracking.progress")}</span>
-                          <span className="text-foreground">{mission.progress}%</span>
+                          <span className="text-foreground">{mission.status === "IN_PROGRESS" ? 65 : 0}%</span>
                         </div>
                         <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                           <div
                             className="h-full bg-primary rounded-full transition-all"
-                            style={{ width: `${mission.progress}%` }}
+                            style={{ width: `${mission.status === "IN_PROGRESS" ? 65 : 0}%` }}
                           />
                         </div>
                       </div>
@@ -327,9 +288,9 @@ export default function ModeratorTrackingPage() {
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-muted-foreground flex items-center gap-1">
                           <Clock className="h-3 w-3" />
-                          {t("client.tracking.eta")}: {mission.eta}
+                          {t("client.tracking.eta")}: {mission.status === "IN_PROGRESS" ? "2h 30min" : "N/A"}
                         </span>
-                        <span className="text-muted-foreground">{t("moderator_tracking.last_update")}: {mission.last_update}</span>
+                        <span className="text-muted-foreground">{t("moderator_tracking.last_update")}: {new Date(mission.updated_at).toLocaleTimeString()}</span>
                       </div>
 
                       <div className="flex gap-2 mt-3">

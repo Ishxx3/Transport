@@ -30,25 +30,21 @@ import {
 } from "recharts"
 import { useState } from "react"
 import { useLanguage } from "@/lib/i18n/context"
+import { useAdminKPIs, useAdminTransactions } from "@/lib/hooks/use-admin"
 
 export default function AdminFinancePage() {
   const { t } = useLanguage()
   const [period, setPeriod] = useState("month")
+  const { data: kpis } = useAdminKPIs()
+  const { data: transactions } = useAdminTransactions(10)
 
+  // On simule des données de graphique basées sur le total pour l'instant
   const revenueData = [
-  { month: "Jan", revenue: 2500000, commissions: 375000 },
-  { month: "Fév", revenue: 3200000, commissions: 480000 },
-  { month: "Mar", revenue: 4100000, commissions: 615000 },
-  { month: "Avr", revenue: 3800000, commissions: 570000 },
-  { month: "Mai", revenue: 4500000, commissions: 675000 },
-  { month: "Jun", revenue: 5200000, commissions: 780000 },
-]
+    { month: "Global", revenue: kpis?.total_revenue || 0, commissions: (kpis?.total_revenue || 0) * 0.15 },
+  ]
   
   const transactionsByType = [
-    { name: t("admin_finance.recharges"), value: 45, color: "#3b82f6" },
-    { name: t("admin_finance.payments"), value: 35, color: "#10b981" },
-    { name: t("admin_finance.withdrawals"), value: 15, color: "#f59e0b" },
-    { name: t("admin_finance.commissions"), value: 5, color: "#8b5cf6" },
+    { name: t("admin_finance.recharges"), value: kpis?.today_transactions || 0, color: "#3b82f6" },
   ]
 
   const topRoutes = [
@@ -103,9 +99,10 @@ export default function AdminFinancePage() {
               <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
                 <DollarSign className="h-5 w-5 text-primary" />
               </div>
-              <Badge className="bg-success/10 text-success border-success/20">+12%</Badge>
             </div>
-            <p className="text-2xl font-bold text-foreground">{(totalRevenue / 1000000).toFixed(1)}M FCFA</p>
+            <p className="text-2xl font-bold text-foreground">
+              {Number(kpis?.total_revenue || 0).toLocaleString()} FCFA
+            </p>
             <p className="text-xs text-muted-foreground">{t("admin_finance.total_revenue")}</p>
           </CardContent>
         </Card>
@@ -115,9 +112,10 @@ export default function AdminFinancePage() {
               <div className="h-10 w-10 rounded-xl bg-success/10 flex items-center justify-center">
                 <TrendingUp className="h-5 w-5 text-success" />
               </div>
-              <Badge className="bg-success/10 text-success border-success/20">+8%</Badge>
             </div>
-            <p className="text-2xl font-bold text-foreground">{(totalCommissions / 1000000).toFixed(2)}M FCFA</p>
+            <p className="text-2xl font-bold text-foreground">
+              {Number((kpis?.total_revenue || 0) * 0.15).toLocaleString()} FCFA
+            </p>
             <p className="text-xs text-muted-foreground">{t("admin_finance.total_commissions")}</p>
           </CardContent>
         </Card>
@@ -127,10 +125,11 @@ export default function AdminFinancePage() {
               <div className="h-10 w-10 rounded-xl bg-accent/10 flex items-center justify-center">
                 <Wallet className="h-5 w-5 text-accent" />
               </div>
-              <Badge className="bg-success/10 text-success border-success/20">+5%</Badge>
             </div>
-            <p className="text-2xl font-bold text-foreground">{Math.round(avgTransactionValue / 1000)}K FCFA</p>
-            <p className="text-xs text-muted-foreground">{t("admin_finance.avg_transaction")}</p>
+            <p className="text-2xl font-bold text-foreground">
+              {Number(kpis?.total_client_balance || 0).toLocaleString()} FCFA
+            </p>
+            <p className="text-xs text-muted-foreground">Solde Clients</p>
           </CardContent>
         </Card>
         <Card className="border-border bg-card">
@@ -139,10 +138,11 @@ export default function AdminFinancePage() {
               <div className="h-10 w-10 rounded-xl bg-warning/10 flex items-center justify-center">
                 <TrendingDown className="h-5 w-5 text-warning" />
               </div>
-              <Badge className="bg-destructive/10 text-destructive border-destructive/20">-2%</Badge>
             </div>
-            <p className="text-2xl font-bold text-foreground">45K FCFA</p>
-            <p className="text-xs text-muted-foreground">{t("admin_finance.penalties_collected")}</p>
+            <p className="text-2xl font-bold text-foreground">
+              {Number(kpis?.total_transporter_balance || 0).toLocaleString()} FCFA
+            </p>
+            <p className="text-xs text-muted-foreground">Solde Transporteurs</p>
           </CardContent>
         </Card>
       </div>
@@ -285,26 +285,29 @@ export default function AdminFinancePage() {
             <CardTitle className="text-foreground">{t("admin_finance.recent_commissions")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {recentTransactions.map((tx) => (
+            {transactions?.slice(0, 5).map((tx) => (
               <div key={tx.id} className="flex items-center justify-between p-3 rounded-lg bg-secondary/50">
                 <div className="flex items-center gap-3">
-                  <div className={`rounded-full p-2 ${tx.type === "commission" ? "bg-success/10" : "bg-warning/10"}`}>
-                    {tx.type === "commission" ? (
+                  <div className={`rounded-full p-2 ${tx.tx_type === "CREDIT" ? "bg-success/10" : "bg-destructive/10"}`}>
+                    {tx.tx_type === "CREDIT" ? (
                       <ArrowUpRight className="h-4 w-4 text-success" />
                     ) : (
-                      <ArrowDownRight className="h-4 w-4 text-warning" />
+                      <ArrowDownRight className="h-4 w-4 text-destructive" />
                     )}
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-foreground">{tx.description}</p>
-                    <p className="text-xs text-muted-foreground">{tx.date}</p>
+                    <p className="text-sm font-medium text-foreground">{tx.description || tx.tx_type}</p>
+                    <p className="text-xs text-muted-foreground">{new Date(tx.created_at).toLocaleString()}</p>
                   </div>
                 </div>
-                <p className={`text-sm font-semibold ${tx.type === "commission" ? "text-success" : "text-warning"}`}>
-                  +{tx.amount.toLocaleString()} FCFA
+                <p className={`text-sm font-semibold ${tx.tx_type === "CREDIT" ? "text-success" : "text-destructive"}`}>
+                  {tx.tx_type === "CREDIT" ? "+" : "-"}{Number(tx.amount).toLocaleString()} FCFA
                 </p>
               </div>
             ))}
+            {(!transactions || transactions.length === 0) && (
+              <p className="text-sm text-muted-foreground text-center py-4">Aucune transaction récente</p>
+            )}
           </CardContent>
         </Card>
       </div>

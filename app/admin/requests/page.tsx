@@ -19,6 +19,7 @@ import {
   Truck,
   CheckCircle,
   XCircle,
+  Download,
 } from "lucide-react"
 import { useLanguage } from "@/lib/i18n/context"
 import useSWR from "swr"
@@ -28,12 +29,12 @@ export default function AdminRequestsPage() {
   const { t } = useLanguage()
 
   const statusConfig: Record<string, { label: string; color: string }> = {
-    pending: { label: "En attente", color: "bg-warning/10 text-warning border-warning/20" },
-    validated: { label: t("moderator_requests.validated_plural"), color: "bg-primary/10 text-primary border-primary/20" },
-    assigned: { label: "Assigné", color: "bg-accent/10 text-accent border-accent/20" },
-    in_progress: { label: "En cours", color: "bg-primary/10 text-primary border-primary/20" },
-    completed: { label: t("common.completed"), color: "bg-success/10 text-success border-success/20" },
-    cancelled: { label: "Annulé", color: "bg-destructive/10 text-destructive border-destructive/20" },
+    PENDING: { label: "En attente", color: "bg-warning/10 text-warning border-warning/20" },
+    VALIDATED: { label: t("moderator_requests.validated_plural"), color: "bg-primary/10 text-primary border-primary/20" },
+    ASSIGNED: { label: "Assigné", color: "bg-accent/10 text-accent border-accent/20" },
+    IN_PROGRESS: { label: "En cours", color: "bg-primary/10 text-primary border-primary/20" },
+    DELIVERED: { label: t("common.completed"), color: "bg-success/10 text-success border-success/20" },
+    CANCELLED: { label: "Annulé", color: "bg-destructive/10 text-destructive border-destructive/20" },
   }
 
   const { data: requests = [], isLoading } = useSWR(["admin-requests", statusFilter], async () => {
@@ -72,9 +73,19 @@ export default function AdminRequestsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">{t("admin_requests.title")}</h1>
-        <p className="text-muted-foreground">{t("admin_requests.subtitle")}</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">{t("admin_requests.title")}</h1>
+          <p className="text-muted-foreground">{t("admin_requests.subtitle")}</p>
+        </div>
+        <Button 
+          variant="outline" 
+          className="border-border text-muted-foreground hover:text-foreground"
+          onClick={() => window.open(process.env.NEXT_PUBLIC_DJANGO_API_URL + '/api/africa_logistic/reports/admin/requests.csv')}
+        >
+          <Download className="mr-2 h-4 w-4" />
+          {t("common.export")} CSV
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">

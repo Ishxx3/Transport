@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,12 +22,128 @@ import {
   Camera,
   Star,
   CheckCircle2,
+  Loader2,
 } from "lucide-react"
 import { useLanguage } from "@/lib/i18n/context"
+import { useAuth } from "@/lib/auth/context"
+import { djangoApi } from "@/lib/api/django"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function TransporterProfilePage() {
+  const { user, refreshUser } = useAuth()
   const { t } = useLanguage()
   const [showPassword, setShowPassword] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
+  const [isPrefLoading, setIsPrefLoading] = useState(false)
+  const [success, setSuccess] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+
+  // Form state
+  const [firstName, setFirstName] = useState(user?.profile?.firstname || user?.firstname || "")
+  const [lastName, setLastName] = useState(user?.profile?.lastname || user?.lastname || "")
+  const [email, setEmail] = useState(user?.profile?.email || user?.email || "")
+  const [phone, setPhone] = useState(user?.profile?.telephone || user?.telephone || "")
+  const [address, setAddress] = useState(user?.profile?.address || user?.address || "")
+
+  // Password state
+  const [currentPassword, setCurrentPassword] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+
+  // Notification Preferences
+  const [prefs, setPrefs] = useState({
+    new_missions: true,
+    sms_notifications: true,
+    mission_updates: true,
+    vehicle_reminders: true
+  })
+
+  useEffect(() => {
+    const fetchPrefs = async () => {
+      try {
+        const response = await djangoApi.getNotificationPreferences()
+        if (response.preferences) {
+          setPrefs(response.preferences)
+        }
+      } catch (error) {
+        console.error("Error fetching preferences:", error)
+      }
+    }
+    if (user?.id) fetchPrefs()
+  }, [user?.id])
+
+  const handleUpdatePrefs = async (key: string, value: boolean) => {
+    const newPrefs = { ...prefs, [key]: value }
+    setPrefs(newPrefs)
+    setIsPrefLoading(true)
+    try {
+      await djangoApi.updateNotificationPreferences(newPrefs)
+    } catch (error) {
+      console.error("Error updating preferences:", error)
+    } finally {
+      setIsPrefLoading(false)
+    }
+  }
+
+  const initials = `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase() || "TR"
+  const fullName = `${firstName} ${lastName}`.trim() || "Transporteur"
+
+  const handleUpdateProfile = async () => {
+    setIsLoading(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const response = await djangoApi.updateProfile({
+        firstname: firstName,
+        lastname: lastName,
+        telephone: phone,
+        address,
+      })
+
+      if (response.error) {
+        setError(response.error)
+      } else {
+        setSuccess("Profil mis à jour avec succès")
+        refreshUser()
+      }
+    } catch (err: any) {
+      setError(err.message || "Erreur lors de la mise à jour")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleUpdatePassword = async () => {
+    if (newPassword !== confirmPassword) {
+      setError("Les mots de passe ne correspondent pas")
+      return
+    }
+
+    setIsLoading(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const response = await djangoApi.changePassword({
+        old_password: currentPassword,
+        new_password: newPassword,
+      })
+
+      if (response.error) {
+        setError(response.error)
+      } else {
+        setSuccess("Mot de passe mis à jour avec succès")
+        setCurrentPassword("")
+        setNewPassword("")
+        setConfirmPassword("")
+      }
+    } catch (err: any) {
+      setError(err.message || "Erreur lors de la mise à jour du mot de passe")
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -42,7 +158,7 @@ export default function TransporterProfilePage() {
           <div className="flex flex-col sm:flex-row items-center gap-6">
             <div className="relative">
               <div className="h-24 w-24 rounded-full bg-primary flex items-center justify-center text-primary-foreground text-3xl font-bold">
-                KY
+                {initials}
               </div>
               <Button
                 size="icon"
@@ -53,13 +169,13 @@ export default function TransporterProfilePage() {
             </div>
             <div className="text-center sm:text-left flex-1">
               <div className="flex items-center justify-center sm:justify-start gap-2 mb-1">
-                <h2 className="text-xl font-bold text-foreground">Kouassi Yao</h2>
+                <h2 className="text-xl font-bold text-foreground">{fullName}</h2>
                 <Badge className="bg-success/20 text-success">
                   <CheckCircle2 className="h-3 w-3 mr-1" />
                   Vérifié
                 </Badge>
               </div>
-              <p className="text-muted-foreground">Transport Express • Transporteur depuis Mars 2023</p>
+              <p className="text-muted-foreground">Transporteur depuis {user?.created_at ? new Date(user.created_at).toLocaleDateString() : ""}</p>
               <div className="flex items-center justify-center sm:justify-start gap-4 mt-2">
                 <div className="flex items-center gap-1">
                   <Star className="h-4 w-4 text-warning fill-warning" />
@@ -73,6 +189,19 @@ export default function TransporterProfilePage() {
           </div>
         </CardContent>
       </Card>
+
+      {success && (
+        <Alert className="border-success bg-success/10">
+          <CheckCircle2 className="h-4 w-4 text-success" />
+          <AlertDescription className="text-success">{success}</AlertDescription>
+        </Alert>
+      )}
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       <Tabs defaultValue="personal" className="w-full">
         <TabsList className="w-full justify-start bg-secondary overflow-x-auto">
@@ -114,11 +243,19 @@ export default function TransporterProfilePage() {
               <div className="grid sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-foreground">Prénom</Label>
-                  <Input defaultValue="Kouassi" className="bg-input border-border text-foreground" />
+                  <Input
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    className="bg-input border-border text-foreground"
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label className="text-foreground">Nom</Label>
-                  <Input defaultValue="Yao" className="bg-input border-border text-foreground" />
+                  <Input
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    className="bg-input border-border text-foreground"
+                  />
                 </div>
               </div>
               <div className="space-y-2">
@@ -127,8 +264,9 @@ export default function TransporterProfilePage() {
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     type="email"
-                    defaultValue="kouassi.yao@email.com"
-                    className="pl-10 bg-input border-border text-foreground"
+                    value={email}
+                    disabled
+                    className="pl-10 bg-input border-border text-foreground opacity-60"
                   />
                 </div>
               </div>
@@ -138,14 +276,19 @@ export default function TransporterProfilePage() {
                   <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     type="tel"
-                    defaultValue="+229 97 XX XX XX"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
                     className="pl-10 bg-input border-border text-foreground"
                   />
                 </div>
               </div>
-              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
+              <Button
+                onClick={handleUpdateProfile}
+                disabled={isLoading}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+              >
                 <Save className="h-4 w-4" />
-                Enregistrer
+                {isLoading ? "Enregistrement..." : "Enregistrer"}
               </Button>
             </CardContent>
           </Card>
@@ -200,6 +343,8 @@ export default function TransporterProfilePage() {
                 <div className="relative">
                   <Input
                     type={showPassword ? "text" : "password"}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
                     className="pr-10 bg-input border-border text-foreground"
                   />
                   <button
@@ -213,15 +358,29 @@ export default function TransporterProfilePage() {
               </div>
               <div className="space-y-2">
                 <Label className="text-foreground">Nouveau mot de passe</Label>
-                <Input type="password" className="bg-input border-border text-foreground" />
+                <Input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="bg-input border-border text-foreground"
+                />
               </div>
               <div className="space-y-2">
                 <Label className="text-foreground">Confirmer</Label>
-                <Input type="password" className="bg-input border-border text-foreground" />
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="bg-input border-border text-foreground"
+                />
               </div>
-              <Button className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2">
+              <Button
+                onClick={handleUpdatePassword}
+                disabled={isLoading}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground gap-2"
+              >
                 <Save className="h-4 w-4" />
-                Mettre à jour
+                {isLoading ? "Mise à jour..." : "Mettre à jour"}
               </Button>
             </CardContent>
           </Card>
@@ -237,17 +396,21 @@ export default function TransporterProfilePage() {
             </CardHeader>
             <CardContent className="space-y-6">
               {[
-                { label: "Nouvelles missions", description: "Être notifié des nouvelles missions disponibles" },
-                { label: "Notifications SMS", description: "Recevoir les alertes par SMS" },
-                { label: "Mises à jour missions", description: "Changements de statut de vos missions" },
-                { label: "Rappels véhicules", description: "Alertes assurance et visite technique" },
-              ].map((item, index) => (
-                <div key={index} className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
+                { id: "new_missions", label: "Nouvelles missions", description: "Être notifié des nouvelles missions disponibles" },
+                { id: "sms_notifications", label: "Notifications SMS", description: "Recevoir les alertes par SMS" },
+                { id: "mission_updates", label: "Mises à jour missions", description: "Changements de statut de vos missions" },
+                { id: "vehicle_reminders", label: "Rappels véhicules", description: "Alertes assurance et visite technique" },
+              ].map((item) => (
+                <div key={item.id} className="flex items-center justify-between p-4 rounded-lg bg-secondary/50">
                   <div>
                     <p className="font-medium text-foreground">{item.label}</p>
                     <p className="text-sm text-muted-foreground">{item.description}</p>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch 
+                    checked={(prefs as any)[item.id]} 
+                    onCheckedChange={(checked) => handleUpdatePrefs(item.id, checked)}
+                    disabled={isPrefLoading}
+                  />
                 </div>
               ))}
             </CardContent>
