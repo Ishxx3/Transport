@@ -38,32 +38,50 @@ export default function AdminFinancePage() {
   const { data: kpis } = useAdminKPIs()
   const { data: transactions } = useAdminTransactions(10)
 
-  // On simule des données de graphique basées sur le total pour l'instant
+  const handleExport = async () => {
+    try {
+      const DJANGO_API_URL = process.env.NEXT_PUBLIC_DJANGO_API_URL || 'http://localhost:8000/api/africa_logistic'
+      const token = localStorage.getItem('django_token')
+      
+      const response = await fetch(`${DJANGO_API_URL}/reports/admin/revenue.csv`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (!response.ok) throw new Error('Export error')
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `revenue-report-${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error('Export error:', error)
+      alert('Erreur lors de l\'export du rapport financier.')
+    }
+  }
+
+  // On utilise les données réelles des KPIs
   const revenueData = [
-    { month: "Global", revenue: kpis?.total_revenue || 0, commissions: (kpis?.total_revenue || 0) * 0.15 },
+    { name: t("common.total"), revenue: kpis?.total_revenue || 0, commissions: (kpis?.total_revenue || 0) * 0.15 },
   ]
   
   const transactionsByType = [
-    { name: t("admin_finance.recharges"), value: kpis?.today_transactions || 0, color: "#3b82f6" },
+    { name: "Livraisons", value: kpis?.completed_requests || 0, color: "#10b981" },
+    { name: "En cours", value: kpis?.in_progress_requests || 0, color: "#3b82f6" },
+    { name: "En attente", value: kpis?.pending_requests || 0, color: "#f59e0b" },
   ]
 
-  const topRoutes = [
-    { route: "Abidjan → Accra", revenue: 1250000, count: 45 },
-    { route: "Dakar → Bamako", revenue: 980000, count: 32 },
-    { route: "Lomé → Cotonou", revenue: 750000, count: 28 },
-    { route: "Ouagadougou → Niamey", revenue: 620000, count: 22 },
-  ]
+  const topRoutes: any[] = []
 
-  const recentTransactions = [
-    { id: "1", type: "commission", amount: 45000, description: `${t("admin_finance.commission")} REQ-001`, date: t("common.today") + " 14:30" },
-    { id: "2", type: "commission", amount: 67500, description: `${t("admin_finance.commission")} REQ-002`, date: t("common.today") + " 11:15" },
-    { id: "3", type: "penalty", amount: 15000, description: t("admin_finance.penalty_cancellation"), date: t("common.yesterday") + " 18:45" },
-    { id: "4", type: "commission", amount: 32000, description: `${t("admin_finance.commission")} REQ-003`, date: t("common.yesterday") + " 09:20" },
-  ]
-
-  const totalRevenue = revenueData.reduce((acc, d) => acc + d.revenue, 0)
-  const totalCommissions = revenueData.reduce((acc, d) => acc + d.commissions, 0)
-  const avgTransactionValue = totalRevenue / 162
+  const totalRevenue = kpis?.total_revenue || 0
+  const totalCommissions = totalRevenue * 0.15
+  const avgTransactionValue = totalRevenue > 0 ? totalRevenue / (kpis?.total_requests || 1) : 0
 
   return (
     <div className="space-y-6">
@@ -85,7 +103,7 @@ export default function AdminFinancePage() {
               <SelectItem value="year">{t("admin_finance.this_year")}</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" className="gap-2 border-border bg-transparent">
+          <Button variant="outline" className="gap-2 border-border bg-transparent" onClick={handleExport}>
             <Download className="h-4 w-4" />
             {t("admin_finance.export")}
           </Button>

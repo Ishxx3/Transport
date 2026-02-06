@@ -1321,6 +1321,99 @@ def export_admin_report(request):
 @require_http_methods(["GET"])
 @is_logged_in
 @is_admin
+def export_revenue_report(request):
+    """Export revenue report for admin"""
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="revenue-report.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['ID', 'Utilisateur', 'Type', 'Montant', 'Description', 'Référence', 'Date'])
+    
+    transactions = WalletTransaction.objects.all().order_by('-created_at')
+    for tx in transactions:
+        writer.writerow([
+            tx.slug,
+            tx.wallet.user.presentation(),
+            tx.tx_type,
+            tx.amount,
+            tx.description,
+            tx.reference,
+            tx.created_at
+        ])
+    
+    return response
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@is_logged_in
+@is_admin
+def export_transporters_report(request):
+    """Export transporters report for admin"""
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="transporters-report.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['ID', 'Nom Complet', 'Email', 'Téléphone', 'Vérifié', 'Approuvé', 'Statut', 'Date Création'])
+    
+    transporters = User.objects.filter(role__iexact='TRANSPORTEUR')
+    for t in transporters:
+        writer.writerow([
+            t.slug,
+            t.presentation(),
+            t.email,
+            t.telephone,
+            "Oui" if t.is_verified else "Non",
+            "Oui" if t.is_approved else "Non",
+            "Actif" if t.is_active else "Inactif",
+            t.created_at
+        ])
+    
+    return response
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@is_logged_in
+@is_admin
+def export_geographic_report(request):
+    """Export geographic distribution report for admin"""
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="geographic-report.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['ID', 'Ville Collecte', 'Ville Livraison', 'Client', 'Statut', 'Date Création'])
+    
+    requests = TransportRequest.objects.all()
+    for r in requests:
+        writer.writerow([
+            r.slug,
+            r.pickup_city,
+            r.delivery_city,
+            r.client.presentation(),
+            r.status,
+            r.created_at
+        ])
+    
+    return response
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@is_logged_in
+@is_admin
+def export_disputes_report(request):
+    """Export disputes report for admin (Placeholder)"""
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="disputes-report.csv"'
+    
+    writer = csv.writer(response)
+    writer.writerow(['ID', 'Demandeur', 'Sujet', 'Statut', 'Date Création'])
+    # No Dispute model yet, returning empty report with headers
+    
+    return response
+
+@csrf_exempt
+@require_http_methods(["GET"])
+@is_logged_in
+@is_admin
 def export_users_report(request):
     """Export all users report for admin"""
     response = HttpResponse(content_type='text/csv')

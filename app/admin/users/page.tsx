@@ -31,6 +31,34 @@ export default function AdminUsersPage() {
 
   const { data: users, isLoading } = useAdminUsers(roleFilter)
 
+  const handleExport = async () => {
+    try {
+      const DJANGO_API_URL = process.env.NEXT_PUBLIC_DJANGO_API_URL || 'http://localhost:8000/api/africa_logistic'
+      const token = localStorage.getItem('django_token')
+      
+      const response = await fetch(`${DJANGO_API_URL}/reports/admin/users.csv`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (!response.ok) throw new Error('Export error')
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `users-report-${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error('Export error:', error)
+      alert('Erreur lors de l\'export des utilisateurs.')
+    }
+  }
+
   const filteredUsers = users?.filter((user) => {
     if (!searchQuery) return true
     const search = searchQuery.toLowerCase()
@@ -92,7 +120,7 @@ export default function AdminUsersPage() {
         <Button 
           variant="outline" 
           className="border-border text-muted-foreground hover:text-foreground"
-          onClick={() => window.open(process.env.NEXT_PUBLIC_DJANGO_API_URL + '/api/africa_logistic/reports/admin/users.csv')}
+          onClick={handleExport}
         >
           <Download className="mr-2 h-4 w-4" />
           Exporter CSV

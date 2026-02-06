@@ -75,17 +75,37 @@ export default function AdminReportsPage() {
     },
   ]
 
-  const handleGenerateReport = (typeId: string) => {
-    const DJANGO_API_URL = process.env.NEXT_PUBLIC_DJANGO_API_URL || 'http://localhost:8000/api/africa_logistic'
-    window.open(`${DJANGO_API_URL}/reports/admin/${typeId}.csv`, '_blank')
+  const handleGenerateReport = async (typeId: string) => {
+    try {
+      const DJANGO_API_URL = process.env.NEXT_PUBLIC_DJANGO_API_URL || 'http://localhost:8000/api/africa_logistic'
+      const token = localStorage.getItem('django_token')
+      
+      const response = await fetch(`${DJANGO_API_URL}/reports/admin/${typeId}.csv`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      
+      if (!response.ok) {
+        throw new Error('Erreur lors du téléchargement du rapport')
+      }
+      
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${typeId}-report-${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error('Download error:', error)
+      alert('Erreur lors du téléchargement du rapport. Assurez-vous d\'être connecté en tant qu\'administrateur.')
+    }
   }
 
-  const recentReports = [
-    { name: `${t("admin_finance.revenue")} Mars 2024`, date: "2024-03-16 10:30", size: "2.4 MB", format: "PDF" },
-    { name: `${t("admin_reports.users_report")} Q1 2024`, date: "2024-03-15 14:20", size: "1.8 MB", format: "Excel" },
-    { name: `${t("admin_reports.transporters_report")} Mars 2024`, date: "2024-03-14 09:15", size: "3.1 MB", format: "PDF" },
-    { name: `${t("admin_reports.requests_report")} Semaine 11`, date: "2024-03-13 16:45", size: "1.2 MB", format: "Excel" },
-  ]
+  const recentReports: any[] = []
 
   return (
     <div className="space-y-6">
@@ -141,7 +161,7 @@ export default function AdminReportsPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold text-foreground">8.5 MB</p>
+                <p className="text-2xl font-bold text-foreground">0.0 MB</p>
                 <p className="text-xs text-muted-foreground">{t("admin_reports.total_size")}</p>
               </div>
               <div className="h-10 w-10 rounded-xl bg-accent/10 flex items-center justify-center">
@@ -154,7 +174,7 @@ export default function AdminReportsPage() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-2xl font-bold text-foreground">24</p>
+                <p className="text-2xl font-bold text-foreground">0</p>
                 <p className="text-xs text-muted-foreground">{t("admin_reports.downloads_this_month")}</p>
               </div>
               <div className="h-10 w-10 rounded-xl bg-warning/10 flex items-center justify-center">
@@ -166,13 +186,13 @@ export default function AdminReportsPage() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-3">
           <Card className="border-border bg-card">
             <CardHeader className="pb-2">
               <CardTitle className="text-foreground">{t("admin_reports.generate_report")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid sm:grid-cols-2 gap-4">
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {reportTypes.map((report) => (
                   <div
                     key={report.id}
@@ -190,7 +210,7 @@ export default function AdminReportsPage() {
                     <p className="text-xs text-muted-foreground mb-3">{report.description}</p>
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">
-                        {t("admin_reports.last_generated")}: {new Date(report.lastGenerated).toLocaleDateString("fr-FR")}
+                        {t("admin_reports.generate_real_time")}
                       </span>
                       <Button 
                         size="sm" 
@@ -207,45 +227,8 @@ export default function AdminReportsPage() {
             </CardContent>
           </Card>
         </div>
-
-        <Card className="border-border bg-card">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-foreground">{t("admin_reports.recent_reports")}</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            {recentReports.map((report, index) => (
-              <div key={index} className="p-3 rounded-lg bg-secondary/50">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-medium text-foreground">{report.name}</span>
-                  </div>
-                  <Badge variant="outline" className="border-border text-xs">
-                    {report.format}
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{report.date}</span>
-                  <span>{report.size}</span>
-                </div>
-                <div className="flex gap-2 mt-3">
-                  <Button variant="outline" size="sm" className="flex-1 h-7 text-xs border-border bg-transparent">
-                    <Eye className="h-3 w-3 mr-1" />
-                    {t("admin_reports.view")}
-                  </Button>
-                  <Button
-                    size="sm"
-                    className="flex-1 h-7 text-xs bg-primary hover:bg-primary/90 text-primary-foreground"
-                  >
-                    <Download className="h-3 w-3 mr-1" />
-                    {t("admin_reports.download")}
-                  </Button>
-                </div>
-              </div>
-            ))}
-          </CardContent>
-        </Card>
       </div>
+    </div>
     </div>
   )
 }

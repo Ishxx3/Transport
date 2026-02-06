@@ -39,6 +39,10 @@ urlpatterns = [
     path('reports/transporter/my-missions.csv', views.export_transporter_missions, name='export_transporter_missions'),
     path('reports/admin/requests.csv', views.export_admin_report, name='export_admin_report'),
     path('reports/admin/users.csv', views.export_users_report, name='export_users_report'),
+    path('reports/admin/revenue.csv', views.export_revenue_report, name='export_revenue_report'),
+    path('reports/admin/transporters.csv', views.export_transporters_report, name='export_transporters_report'),
+    path('reports/admin/geographic.csv', views.export_geographic_report, name='export_geographic_report'),
+    path('reports/admin/disputes.csv', views.export_disputes_report, name='export_disputes_report'),
     
     path('data-admin/users/', views.get_users_by_data_admin, name='get_users_by_data_admin'),
     path('data-admin/user/<str:user_slug>/alter/', views.alter_user_by_data_admin, name='alter_user_by_data_admin'),
